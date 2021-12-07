@@ -92,7 +92,7 @@ type SubscriptionClient struct {
 	cancel           context.CancelFunc
 	subscribersMu    sync.Mutex
 	timeout          time.Duration
-	isRunning        int64
+	isRunning        int32
 	readLimit        int64 // max size of response message. Default 10 MB
 	log              func(args ...interface{})
 	createConn       func(sc *SubscriptionClient) (WebsocketConn, error)
@@ -197,9 +197,9 @@ func (sc *SubscriptionClient) OnDisconnected(fn func()) *SubscriptionClient {
 
 func (sc *SubscriptionClient) setIsRunning(value Boolean) {
 	if value {
-		atomic.StoreInt64(&sc.isRunning, 1)
+		atomic.StoreInt32(&sc.isRunning, 1)
 	} else {
-		atomic.StoreInt64(&sc.isRunning, 0)
+		atomic.StoreInt32(&sc.isRunning, 0)
 	}
 }
 
@@ -313,7 +313,7 @@ func (sc *SubscriptionClient) doRaw(query string, variables map[string]interface
 	}
 
 	// if the websocket client is running, start subscription immediately
-	if atomic.LoadInt64(&sc.isRunning) > 0 {
+	if atomic.LoadInt32(&sc.isRunning) > 0 {
 		if err := sc.startSubscription(id, &sub); err != nil {
 			return "", err
 		}
@@ -387,7 +387,7 @@ func (sc *SubscriptionClient) Run() error {
 
 	sc.setIsRunning(true)
 
-	for atomic.LoadInt64(&sc.isRunning) > 0 {
+	for atomic.LoadInt32(&sc.isRunning) > 0 {
 		select {
 		case <-sc.context.Done():
 			return nil
@@ -477,7 +477,7 @@ func (sc *SubscriptionClient) Run() error {
 	}
 
 	// if the running status is false, stop retrying
-	if atomic.LoadInt64(&sc.isRunning) == 0 {
+	if atomic.LoadInt32(&sc.isRunning) == 0 {
 		return nil
 	}
 
@@ -533,7 +533,7 @@ func (sc *SubscriptionClient) terminate() error {
 
 // Reset restart websocket connection and subscriptions
 func (sc *SubscriptionClient) Reset() error {
-	if atomic.LoadInt64(&sc.isRunning) == 0 {
+	if atomic.LoadInt32(&sc.isRunning) == 0 {
 		return nil
 	}
 
