@@ -379,7 +379,8 @@ func (sc *SubscriptionClient) Run() error {
 	sc.subscribersMu.Lock()
 	for k, v := range sc.subscriptions {
 		if err := sc.startSubscription(k, v); err != nil {
-			sc.Unsubscribe(k)
+			sc.internalUnsubscribe(k)
+			sc.subscribersMu.Unlock()
 			return err
 		}
 	}
@@ -483,13 +484,7 @@ func (sc *SubscriptionClient) Run() error {
 
 	return sc.Reset()
 }
-
-// Unsubscribe sends stop message to server and close subscription channel
-// The input parameter is subscription ID that is returned from Subscribe function
-func (sc *SubscriptionClient) Unsubscribe(id string) error {
-	sc.subscribersMu.Lock()
-	defer sc.subscribersMu.Unlock()
-
+func (sc *SubscriptionClient) internalUnsubscribe(id string) error {
 	_, ok := sc.subscriptions[id]
 	if !ok {
 		return fmt.Errorf("subscription id %s doesn't not exist", id)
@@ -497,6 +492,16 @@ func (sc *SubscriptionClient) Unsubscribe(id string) error {
 
 	delete(sc.subscriptions, id)
 	return sc.stopSubscription(id)
+
+}
+
+// Unsubscribe sends stop message to server and close subscription channel
+// The input parameter is subscription ID that is returned from Subscribe function
+func (sc *SubscriptionClient) Unsubscribe(id string) error {
+	sc.subscribersMu.Lock()
+	defer sc.subscribersMu.Unlock()
+
+	return sc.internalUnsubscribe(id)
 }
 
 func (sc *SubscriptionClient) stopSubscription(id string) error {
@@ -560,8 +565,12 @@ func (sc *SubscriptionClient) Close() (err error) {
 
 	sc.subscribersMu.Lock()
 	for id := range sc.subscriptions {
-		if err = sc.Unsubscribe(id); err != nil {
+		if err = sc.internalUnsubscribe(id); err != nil {
 			sc.cancel()
+			// Is it correct to stop the unsubscribe iteration?
+			// How should the the code recover from this error?
+
+			sc.subscribersMu.Unlock()
 			return err
 		}
 	}
