@@ -742,7 +742,7 @@ func (sc *SubscriptionClient) Run() error {
 	}
 
 	if err := sc.init(); err != nil {
-		return fmt.Errorf("retry timeout. exiting...")
+		return fmt.Errorf("retry timeout, %w", err)
 	}
 
 	subContext := sc.getContext()
